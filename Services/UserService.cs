@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using WebApi.Entities;
 using WebApi.Helpers;
+using System.Text.RegularExpressions;
 
 namespace WebApi.Services
 {
@@ -40,6 +41,7 @@ namespace WebApi.Services
             if (!VerifyPasswordHash(password, user.PasswordHash, user.PasswordSalt))
                 return null;
 
+            
             // authentication successful
             return user;
         }
@@ -61,7 +63,10 @@ namespace WebApi.Services
                 throw new AppException("Password is required");
 
             if (_context.Users.Any(x => x.Username == user.Username))
-                throw new AppException("Username \"" + user.Username + "\" is already taken");
+                throw new AppException("Username \"" + user.Username + "\" is already taken.");
+
+            ValidatePassword(password, user);
+
 
             byte[] passwordHash, passwordSalt;
             CreatePasswordHash(password, out passwordHash, out passwordSalt);
@@ -135,6 +140,38 @@ namespace WebApi.Services
                 passwordSalt = hmac.Key;
                 passwordHash = hmac.ComputeHash(System.Text.Encoding.UTF8.GetBytes(password));
             }
+
+        }
+
+        private static void ValidatePassword(string password, string user)
+        {
+            var hasNumber = new Regex(@"[0-9]+");
+            var hasUpperChar = new Regex(@"[A-Z]+");
+            var hasMiniMaxChars = new Regex(@".{8,15}");
+            var hasLowerChar = new Regex(@"[a-z]+");
+            var hasSymbols = new Regex(@"[!@#$%^&*()_+=\[{\]};:<>|./?,-]");
+
+            if (!hasLowerChar.IsMatch(password))
+            {
+                throw new AppException("Password should contain at least one lower case letter.");
+            }
+            else if (!hasUpperChar.IsMatch(password))
+            {
+                throw new AppException("Password should contain at least one upper case letter.");
+            }
+            else if (!hasMiniMaxChars.IsMatch(password))
+            {
+                throw new AppException("Password should not be lesser than 8 or greater than 15 characters.");
+            }
+            else if (!hasNumber.IsMatch(password))
+            {
+                throw new AppException("Password should contain at least one numeric value.");
+            }
+
+            else if (!hasSymbols.IsMatch(password))
+            {
+                throw new AppException("Password should contain at least one special case character.");
+            }
         }
 
         private static bool VerifyPasswordHash(string password, byte[] storedHash, byte[] storedSalt)
@@ -143,6 +180,7 @@ namespace WebApi.Services
             if (string.IsNullOrWhiteSpace(password)) throw new ArgumentException("Value cannot be empty or whitespace only string.", "password");
             if (storedHash.Length != 64) throw new ArgumentException("Invalid length of password hash (64 bytes expected).", "passwordHash");
             if (storedSalt.Length != 128) throw new ArgumentException("Invalid length of password salt (128 bytes expected).", "passwordHash");
+           
 
             using (var hmac = new System.Security.Cryptography.HMACSHA512(storedSalt))
             {
